@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Chat & Privacy Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-title">
+        <span class="logo">🎯</span>
+        <h2>Vision Chat</h2>
+      </div>
+      <div id="statusBadge" class="status-badge checking">
+        <span class="dot"></span>
+        <span id="statusText">Checking...</span>
+      </div>
+    </header>
+
+    <div id="chat">
+      <div class="message assistant welcome">
+        <strong>👋 Welcome to Vision Chat!</strong><br>
+        Capture a screenshot and ask questions to locate UI elements or scan for sensitive PII regions.
+      </div>
+    </div>
+
+    <div id="previewContainer">
+      <div class="preview-header">
+        <span>Active Screenshot</span>
+        <button id="clearPreview" class="icon-btn" title="Remove screenshot">✕</button>
+      </div>
+      <div class="canvas-wrapper">
+        <img id="previewImage" alt="Screenshot preview">
+        <canvas id="overlayCanvas"></canvas>
+      </div>
+    </div>
+
+    <div id="inputArea">
+      <div class="quick-actions">
+        <button id="captureBtn" class="action-btn">📸 Capture</button>
+        <button id="detectPiiBtn" class="action-btn secondary">🔒 Scan PII</button>
+      </div>
+
+      <div class="input-wrapper">
+        <textarea
+          id="prompt"
+          placeholder="e.g. 'Click on the search bar' or 'Where is the submit button?'"
+          rows="2"
+        ></textarea>
+        <button id="sendBtn" class="send-btn" title="Send query">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

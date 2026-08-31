@@ -1,0 +1,103 @@
+# Git Ignore for SIH 2026 - Privacy-Preserving Vision Agent (GoClick + Extension)
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+venv*/
+env/
+env*/
+.venv/
+.venv*/
+ENV/
+env.bak/
+venv.bak/
+
+# Packaging & Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+*.whl
+
+# Model Checkpoints, Weights & Large Datasets
+checkpoints/
+ckpts*/
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.onnx
+*.engine
+
+# HuggingFace & dataset caches
+.cache/
+hf_cache/
+hf_dataset_cache/
+invalid_cache/
+data/
+playground/Preference_data/
+playground/data/
+
+# Logs & Experiment Tracking
+*.log
+*.log.*
+logs/
+wandb/
+output/
+eval_results/
+*_eval_results/
+*eval_results/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Local Debug Screenshots (keep test fixture images like test_*.png and ui_screenshot.png)
+debug_output.png
+*som*.png
+*.pdf
+
+# Operating System Files
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+__MACOSX/
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# IDEs and Code Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+
+# Node / Frontend Artifacts
+node_modules/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

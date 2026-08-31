@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+
+  "name": "Vision Chat Assistant",
+
+  "description": "ChatGPT-style browser assistant using a local Vision Language Model.",
+
+  "version": "1.0.0",
+
+  "action": {
+    "default_title": "Vision Chat"
+  },
+
+  "background": {
+    "service_worker": "background/service_worker.js",
+    "type": "module"
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:8000/*"
+  ],
+
+ "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"]
+    }
+  ]
+}
