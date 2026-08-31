@@ -1,0 +1,75 @@
+# Git Ignore for GoClick
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+venv/
+venv*/
+env/
+env*/
+.venv/
+.venv*/
+ENV/
+
+# Packaging & Build
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Model Checkpoints, Weights & Large Datasets
+checkpoints/
+ckpts*/
+highres_autogui_ckpt/
+*.pth
+*.pt
+*.bin
+*.safetensors
+.cache/
+hf_cache/
+hf_dataset_cache/
+invalid_cache/
+data/
+/data
+playground/Preference_data/
+playground/data/
+
+# Logs & Tracking
+*.log
+*.log.*
+logs/
+wandb/
+output/
+eval_results/
+*_eval_results/
+*eval_results/
+utils/eval_utils/*/eval_results/
+utils/data_utils/*/*results/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Local Debug Screenshots
+debug_output.png
+*som*.png
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+__MACOSX/
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
