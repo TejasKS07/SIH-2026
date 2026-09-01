@@ -5,6 +5,7 @@ import {
   callBackendLocate,
   callBackendDetectPII,
 } from "../utils/messaging.js";
+import { browserAPI } from "../utils/browser-polyfill.js";
 
 // DOM Elements
 const chat = document.getElementById("chat");
@@ -18,8 +19,10 @@ const overlayCanvas = document.getElementById("overlayCanvas");
 const clearPreviewBtn = document.getElementById("clearPreview");
 const statusBadge = document.getElementById("statusBadge");
 const statusText = document.getElementById("statusText");
+const popoutBtn = document.getElementById("popoutBtn");
 
 let currentScreenshot = null;
+let currentAnnotations = [];
 
 // Initialize Backend Health Check
 async function updateStatus() {
@@ -35,6 +38,30 @@ async function updateStatus() {
 
 updateStatus();
 setInterval(updateStatus, 8000);
+
+// Pop-out / Standalone window handler (Great for Safari, detached desktop screens)
+if (popoutBtn) {
+  popoutBtn.addEventListener("click", async () => {
+    try {
+      const sidepanelUrl = browserAPI.runtime.getURL("sidepanel/sidepanel.html");
+      if (browserAPI.windows?.create) {
+        await browserAPI.windows.create({
+          url: sidepanelUrl,
+          type: "popup",
+          width: 440,
+          height: 750,
+        });
+      } else if (browserAPI.tabs?.create) {
+        await browserAPI.tabs.create({ url: sidepanelUrl });
+      } else {
+        window.open(sidepanelUrl, "_blank", "width=440,height=750");
+      }
+    } catch (err) {
+      console.warn("Popout window error:", err);
+      window.open(window.location.href, "_blank", "width=440,height=750");
+    }
+  });
+}
 
 // Capture Screenshot Handler
 captureBtn.addEventListener("click", async () => {
@@ -55,15 +82,29 @@ captureBtn.addEventListener("click", async () => {
 // Clear Screenshot
 clearPreviewBtn.addEventListener("click", () => {
   currentScreenshot = null;
+  currentAnnotations = [];
   previewContainer.style.display = "none";
   clearCanvas();
 });
 
 function setScreenshot(imageSrc) {
   currentScreenshot = imageSrc;
+  currentAnnotations = [];
   previewImage.src = imageSrc;
   previewContainer.style.display = "block";
   clearCanvas();
+
+  previewImage.onload = () => {
+    redrawAnnotations();
+  };
+}
+
+function syncCanvasSize() {
+  const rect = previewImage.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    overlayCanvas.width = rect.width;
+    overlayCanvas.height = rect.height;
+  }
 }
 
 function clearCanvas() {
@@ -71,14 +112,30 @@ function clearCanvas() {
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 }
 
-function drawBoundingBox(bbox, label, color = "#10a37f") {
+function redrawAnnotations() {
+  syncCanvasSize();
+  clearCanvas();
+  for (const ann of currentAnnotations) {
+    if (ann.type === "box") {
+      renderBoundingBox(ann.bbox, ann.label, ann.color);
+    } else if (ann.type === "point") {
+      renderPoint(ann.point, ann.label, ann.color);
+    }
+  }
+}
+
+window.addEventListener("resize", () => {
+  if (currentScreenshot) {
+    redrawAnnotations();
+  }
+});
+
+function renderBoundingBox(bbox, label, color = "#10b981") {
   if (!bbox || bbox.length < 4) return;
   const ctx = overlayCanvas.getContext("2d");
   const imgW = previewImage.naturalWidth || previewImage.width;
   const imgH = previewImage.naturalHeight || previewImage.height;
-
-  overlayCanvas.width = previewImage.clientWidth;
-  overlayCanvas.height = previewImage.clientHeight;
+  if (!imgW || !imgH) return;
 
   const scaleX = overlayCanvas.width / imgW;
   const scaleY = overlayCanvas.height / imgH;
@@ -89,35 +146,76 @@ function drawBoundingBox(bbox, label, color = "#10a37f") {
   const rw = (x2 - x1) * scaleX;
   const rh = (y2 - y1) * scaleY;
 
+  // Box border
   ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.strokeRect(rx, ry, rw, rh);
 
-  ctx.fillStyle = color;
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText(label, rx + 4, Math.max(14, ry - 4));
+  // Background tint
+  ctx.fillStyle = color.startsWith("#") ? `${color}22` : "rgba(16, 185, 129, 0.15)";
+  ctx.fillRect(rx, ry, rw, rh);
+
+  // Label tag
+  if (label) {
+    ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+    const textMetrics = ctx.measureText(label);
+    const tagHeight = 16;
+    const tagWidth = textMetrics.width + 8;
+    const tagY = Math.max(0, ry - tagHeight);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(rx, tagY, tagWidth, tagHeight);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(label, rx + 4, tagY + 12);
+  }
 }
 
-function drawPoint(point, label, color = "#ef4444") {
+function renderPoint(point, label, color = "#ef4444") {
   if (!point || point.length < 2) return;
   const ctx = overlayCanvas.getContext("2d");
   const imgW = previewImage.naturalWidth || previewImage.width;
   const imgH = previewImage.naturalHeight || previewImage.height;
-
-  overlayCanvas.width = previewImage.clientWidth;
-  overlayCanvas.height = previewImage.clientHeight;
+  if (!imgW || !imgH) return;
 
   const px = point[0] * (overlayCanvas.width / imgW);
   const py = point[1] * (overlayCanvas.height / imgH);
 
+  // Target pulse / ring
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(px, py, 12, 0, 2 * Math.PI);
+  ctx.stroke();
+
+  // Solid center dot
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(px, py, 6, 0, 2 * Math.PI);
+  ctx.arc(px, py, 5, 0, 2 * Math.PI);
   ctx.fill();
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText(label, px + 10, py + 4);
+  // Label
+  if (label) {
+    ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, sans-serif";
+    const textMetrics = ctx.measureText(label);
+    const textWidth = textMetrics.width;
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fillRect(px + 10, py - 10, textWidth + 8, 18);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(label, px + 14, py + 3);
+  }
+}
+
+function addBoundingBox(bbox, label, color) {
+  currentAnnotations.push({ type: "box", bbox, label, color });
+  renderBoundingBox(bbox, label, color);
+}
+
+function addPoint(point, label, color) {
+  currentAnnotations.push({ type: "point", point, label, color });
+  renderPoint(point, label, color);
 }
 
 // Send / Locate Action
@@ -146,8 +244,10 @@ async function handleSend() {
     const res = await callBackendLocate(currentScreenshot, query);
 
     if (res.found_coordinates) {
+      currentAnnotations = [];
+      syncCanvasSize();
       clearCanvas();
-      drawPoint(res.point, query);
+      addPoint(res.point, query, "#ef4444");
       addMessage(
         `🎯 Located target at (${res.point[0]}, ${res.point[1]}) with confidence ${(res.confidence * 100).toFixed(1)}%.`,
         "assistant"
@@ -156,7 +256,10 @@ async function handleSend() {
       addMessage("❌ Could not ground coordinates for this description.", "assistant");
     }
   } catch (err) {
-    addMessage(`⚠️ Backend error: ${err.message}. Make sure 'python server.py --mock' is running on localhost:8000.`, "assistant");
+    addMessage(
+      `⚠️ Backend error: ${err.message}. Make sure the backend server is running on http://localhost:8000.`,
+      "assistant"
+    );
   } finally {
     sendBtn.disabled = false;
   }
@@ -182,6 +285,8 @@ detectPiiBtn.addEventListener("click", async () => {
     const pageData = await extractDOMData();
     const result = await callBackendDetectPII(currentScreenshot, pageData.dom_elements || []);
 
+    currentAnnotations = [];
+    syncCanvasSize();
     clearCanvas();
 
     const accepted = result.regions || [];
@@ -193,13 +298,13 @@ detectPiiBtn.addEventListener("click", async () => {
       let msg = `🔒 Detected ${accepted.length} protected region(s):<br>`;
       accepted.forEach((reg) => {
         msg += `<span class="region-tag">${reg.type}</span> (bbox: [${reg.bbox.join(", ")}])<br>`;
-        drawBoundingBox(reg.bbox, reg.type, "#10b981");
+        addBoundingBox(reg.bbox, reg.type, "#10b981");
       });
 
       if (uncertain.length > 0) {
         msg += `<br>⚠️ ${uncertain.length} uncertain region(s) routed for secondary verification.`;
         uncertain.forEach((reg) => {
-          if (reg.bbox) drawBoundingBox(reg.bbox, `? ${reg.type}`, "#f59e0b");
+          if (reg.bbox) addBoundingBox(reg.bbox, `? ${reg.type}`, "#f59e0b");
         });
       }
 

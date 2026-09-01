@@ -4,6 +4,13 @@
   "description": "ChatGPT-style browser assistant using a local Vision Language Model.",
   "version": "1.0.0",
 
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "vision-chat-assistant@sih.local",
+      "strict_min_version": "109.0"
+    }
+  },
+
   "action": {
     "default_title": "Vision Chat",
     "default_icon": {
@@ -14,19 +21,24 @@
   },
 
   "background": {
-    "service_worker": "background/service_worker.js",
+    "scripts": ["background/service_worker.js"],
     "type": "module"
   },
 
-  "side_panel": {
-    "default_path": "sidepanel/sidepanel.html"
+  "sidebar_action": {
+    "default_panel": "sidepanel/sidepanel.html",
+    "default_title": "Vision Chat",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
 
   "permissions": [
     "tabs",
     "activeTab",
     "storage",
-    "sidePanel",
     "scripting"
   ],
 

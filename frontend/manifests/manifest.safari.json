@@ -18,15 +18,10 @@
     "type": "module"
   },
 
-  "side_panel": {
-    "default_path": "sidepanel/sidepanel.html"
-  },
-
   "permissions": [
     "tabs",
     "activeTab",
     "storage",
-    "sidePanel",
     "scripting"
   ],
 
