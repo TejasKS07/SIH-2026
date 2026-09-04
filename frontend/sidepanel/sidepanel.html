@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Vision Chat & Privacy Assistant</title>
   <link rel="stylesheet" href="sidepanel.css">
+  <script src="suppress-warnings.js"></script>
 </head>
 <body>
   <div id="app">
@@ -48,13 +49,32 @@
         <button id="detectPiiBtn" class="action-btn secondary" aria-label="Scan page for PII">🔒 Scan PII</button>
       </div>
 
+      <div id="sttStatusContainer" class="stt-status-container" style="display: none;">
+        <div class="stt-status-header">
+          <span id="sttStatusText" class="stt-status-text">Recording...</span>
+          <div id="sttVisualizer" class="stt-visualizer">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+          </div>
+          <button id="sttCancelBtn" class="icon-btn stt-cancel" title="Cancel recording" aria-label="Cancel">✕</button>
+        </div>
+        <div id="sttProgressBarWrapper" class="stt-progress-wrapper" style="display: none;">
+          <div id="sttProgressBar" class="stt-progress-bar"></div>
+        </div>
+      </div>
+
       <div class="input-wrapper">
         <textarea
           id="prompt"
-          placeholder="e.g., 'Click on the search bar' or 'Where is the submit button?'"
+          placeholder="e.g., 'Click on the search bar' or speak via mic..."
           rows="2"
           aria-label="Input prompt"
         ></textarea>
+        <button id="micBtn" class="mic-btn" title="Click to speak (Whisper STT)" aria-label="Voice input">
+          <span class="mic-icon">🎙️</span>
+        </button>
         <button id="sendBtn" class="send-btn" title="Send query" aria-label="Send query">➤</button>
       </div>
     </footer>

@@ -6,11 +6,13 @@ import {
   callBackendDetectPII,
 } from "../utils/messaging.js";
 import { browserAPI } from "../utils/browser-polyfill.js";
+import { STTController } from "../stt/index.js";
 
 // DOM Elements
 const chat = document.getElementById("chat");
 const promptInput = document.getElementById("prompt");
 const sendBtn = document.getElementById("sendBtn");
+const micBtn = document.getElementById("micBtn");
 const captureBtn = document.getElementById("captureBtn");
 const detectPiiBtn = document.getElementById("detectPiiBtn");
 const previewContainer = document.getElementById("previewContainer");
@@ -20,6 +22,14 @@ const clearPreviewBtn = document.getElementById("clearPreview");
 const statusBadge = document.getElementById("statusBadge");
 const statusText = document.getElementById("statusText");
 const popoutBtn = document.getElementById("popoutBtn");
+
+// STT DOM Elements
+const sttStatusContainer = document.getElementById("sttStatusContainer");
+const sttStatusText = document.getElementById("sttStatusText");
+const sttVisualizer = document.getElementById("sttVisualizer");
+const sttCancelBtn = document.getElementById("sttCancelBtn");
+const sttProgressBarWrapper = document.getElementById("sttProgressBarWrapper");
+const sttProgressBar = document.getElementById("sttProgressBar");
 
 let currentScreenshot = null;
 let currentAnnotations = [];
@@ -333,4 +343,127 @@ function addMessage(text, type) {
   div.innerHTML = text;
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
+}
+
+// ----------------------------------------------------
+// Speech-to-Text (STT) Integration
+// ----------------------------------------------------
+if (micBtn) {
+  const stt = new STTController({
+    targetElement: promptInput,
+    autoSubmit: false,
+    onSubmit: handleSend,
+  });
+
+  // Handle STT State Transitions
+  stt.onStateChange((state, detail) => {
+    switch (state) {
+      case "recording":
+        micBtn.classList.add("recording");
+        micBtn.classList.remove("loading");
+        micBtn.title = "Click to stop recording";
+        micBtn.innerHTML = '<span class="mic-icon">⏹️</span>';
+        sttStatusContainer.style.display = "flex";
+        sttStatusText.textContent = "Listening... (Click ⏹️ to transcribe)";
+        sttVisualizer.style.display = "flex";
+        sttVisualizer.classList.add("active");
+        sttProgressBarWrapper.style.display = "none";
+        break;
+
+      case "processing_audio":
+        micBtn.classList.remove("recording");
+        micBtn.classList.add("loading");
+        sttStatusText.textContent = "Processing audio...";
+        sttVisualizer.classList.remove("active");
+        break;
+
+      case "loading_model":
+        micBtn.classList.remove("recording");
+        micBtn.classList.add("loading");
+        sttStatusContainer.style.display = "flex";
+        sttStatusText.textContent = "Loading Whisper AI model (first run may download ONNX weights)...";
+        sttVisualizer.style.display = "none";
+        sttProgressBarWrapper.style.display = "block";
+        break;
+
+      case "transcribing":
+        micBtn.classList.remove("recording");
+        micBtn.classList.add("loading");
+        sttStatusContainer.style.display = "flex";
+        sttStatusText.textContent = "Transcribing speech on-device...";
+        sttVisualizer.style.display = "none";
+        sttProgressBarWrapper.style.display = "none";
+        break;
+
+      case "idle":
+        micBtn.classList.remove("recording", "loading");
+        micBtn.title = "Click to speak (Whisper STT)";
+        micBtn.innerHTML = '<span class="mic-icon">🎙️</span>';
+        sttStatusContainer.style.display = "none";
+        sttVisualizer.classList.remove("active");
+        sttProgressBarWrapper.style.display = "none";
+        if (detail && detail.transcribedText) {
+          console.log("[STT] Transcription complete:", detail.transcribedText);
+        }
+        break;
+
+      case "error":
+        micBtn.classList.remove("recording", "loading");
+        micBtn.title = "Click to speak (Whisper STT)";
+        micBtn.innerHTML = '<span class="mic-icon">🎙️</span>';
+        sttStatusContainer.style.display = "none";
+        sttVisualizer.classList.remove("active");
+        sttProgressBarWrapper.style.display = "none";
+        break;
+    }
+  });
+
+  // Handle Model Download & Initialization Progress
+  stt.onProgress((progress) => {
+    if (!progress) return;
+    if (progress.status === "progress" && progress.total) {
+      const pct = Math.round((progress.loaded / progress.total) * 100);
+      sttProgressBar.style.width = `${pct}%`;
+      const fileLabel = progress.file ? ` (${progress.file})` : "";
+      sttStatusText.textContent = `Downloading Whisper model${fileLabel}: ${pct}%`;
+    } else if (progress.status === "done") {
+      sttProgressBar.style.width = "100%";
+      sttStatusText.textContent = "Model weights downloaded. Initializing pipeline...";
+    }
+  });
+
+  // Handle Errors Gracefully
+  stt.onError(({ code, message }) => {
+    console.warn(`[STT Error: ${code}]`, message);
+    if (code === "PERMISSION_DENIED") {
+      addMessage(
+        "🎤 <strong>Microphone Permission Denied:</strong> Please click the extension icon or browser settings to allow microphone access.",
+        "assistant"
+      );
+    } else if (code === "DEVICE_NOT_FOUND") {
+      addMessage("🎤 <strong>No Microphone Found:</strong> Please connect a microphone and try again.", "assistant");
+    } else {
+      addMessage(`⚠️ <strong>Speech-to-Text Error:</strong> ${message}`, "assistant");
+    }
+  });
+
+  // Dynamic Volume Visualizer
+  stt.onVolume((volume) => {
+    const bars = sttVisualizer.querySelectorAll(".bar");
+    bars.forEach((bar, idx) => {
+      const height = Math.max(3, Math.min(14, Math.round(volume * 18 * (1 + idx * 0.2))));
+      bar.style.height = `${height}px`;
+    });
+  });
+
+  // User Action Bindings
+  micBtn.addEventListener("click", () => {
+    stt.toggleRecording();
+  });
+
+  if (sttCancelBtn) {
+    sttCancelBtn.addEventListener("click", () => {
+      stt.cancel();
+    });
+  }
 }

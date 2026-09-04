@@ -6,7 +6,10 @@ param (
 $RootDir = $PSScriptRoot
 $DistDir = Join-Path $RootDir "dist"
 $ManifestsDir = Join-Path $RootDir "manifests"
-$SharedFolders = @("background", "content", "icons", "sidepanel", "utils")
+$SharedFolders = @("background", "content", "icons", "sidepanel", "stt", "utils")
+if (Test-Path (Join-Path $RootDir "models")) {
+    $SharedFolders += "models"
+}
 
 function Build-Browser([string]$BrowserName, [string]$ManifestSource) {
     $OutDir = Join-Path $DistDir $BrowserName

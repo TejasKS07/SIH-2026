@@ -30,9 +30,22 @@
     "scripting"
   ],
 
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+
   "host_permissions": [
     "<all_urls>",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "https://huggingface.co/*",
+    "https://*.hf.co/*"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["stt/*", "models/*"],
+      "matches": ["<all_urls>"]
+    }
   ],
 
   "icons": {

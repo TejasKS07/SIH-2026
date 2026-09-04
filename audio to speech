@@ -1,0 +1,142 @@
+# Speech-to-Text (STT) Module Implementation Plan
+
+## Goal Description
+Build a modular, production-ready speech-to-text (STT) pipeline for the browser extension using `@xenova/transformers` (Transformers.js) and Whisper (`Xenova/whisper-small.en`). The architecture enforces strict separation of concerns across 4 decoupled modules so that the Whisper model can be swapped (e.g., from English-only to multilingual) solely by editing a single configuration file without modifying any other part of the pipeline.
+
+---
+
+## User Review Required
+> [!IMPORTANT]
+> - **In-Browser Execution & Storage**: `Xenova/whisper-small.en` is ~240MB quantized (ONNX). On the first run, Transformers.js automatically downloads the model files and caches them locally inside the browser's IndexedDB / Cache API. Subsequent runs load instantly from local cache with 0 network calls.
+> - **Threading Architecture**: Transformers.js ASR inference can be compute-intensive. We provide both a direct module interface and an optional Web Worker bridge (`sttWorker.js`) so the sidepanel UI does not stutter during transcription.
+
+---
+
+## Architecture & Module Separation
+
+```mermaid
+flowchart LR
+    subgraph STT Architecture
+        A[Audio Capture Layer<br/><code>audioCapture.js</code>] -->|16kHz Mono Float32Array| C[STT Orchestrator<br/><code>sttController.js</code>]
+        B[Model Config<br/><code>config.js</code>] -->|modelId, lang, quant| D[Inference Layer<br/><code>inference.js</code>]
+        C -->|Raw Audio| D
+        D -->|Transcribed String| C
+        C -->|Text Only| E[Output Handler<br/><code>outputHandler.js</code>]
+        E -->|Inject / Submit| F[Chatbot UI / Textarea<br/><code>sidepanel.js</code>]
+    end
+```
+
+### Module Contracts:
+
+1. **Audio Capture Layer (`frontend/stt/audioCapture.js`)**:
+   - Manages microphone permissions (`navigator.mediaDevices.getUserMedia`).
+   - Uses Web Audio API (`AudioContext` / `OfflineAudioContext`) to record and resample audio strictly to **16,000 Hz single-channel (mono) `Float32Array`** normalized to `[-1.0, 1.0]`.
+   - Exposes:
+     - `startRecording()`
+     - `stopRecording() -> Promise<Float32Array>`
+     - `cancelRecording()`
+     - `isRecording()`
+     - `onVolumeChange(callback)` (for dynamic audio level feedback)
+   - *Zero knowledge of Whisper, models, or transformers.js.*
+
+2. **Model Config (`frontend/stt/config.js`)**:
+   - Single source of truth for STT parameters.
+   - Contains:
+     ```javascript
+     export const STT_CONFIG = Object.freeze({
+       modelId: "Xenova/whisper-small.en", // Hugging Face model repository
+       language: "english",               // Target language ("english", "es", "fr", etc.)
+       quantized: true,                  // 8-bit quantized ONNX weights for fast client-side inference
+       task: "transcribe",               // "transcribe" or "translate"
+       chunkLengthS: 30,                 // Whisper chunk length in seconds
+       strideLengthS: 5                  // Overlap stride in seconds
+     });
+     ```
+   - Swapping to `Xenova/whisper-small` (multilingual) or `Xenova/whisper-tiny` only requires modifying this file.
+
+3. **Inference Layer (`frontend/stt/inference.js` + `frontend/stt/sttWorker.js`)**:
+   - Imports `STT_CONFIG` from `config.js`.
+   - Manages singleton pipeline: `pipeline('automatic-speech-recognition', STT_CONFIG.modelId, { quantized: STT_CONFIG.quantized, progress_callback })`.
+   - Reuses pipeline across transcriptions without reloading.
+   - Exposes:
+     - `initModel(progressCallback) -> Promise<void>`
+     - `transcribe(audioData: Float32Array) -> Promise<string>`
+     - `isModelReady() -> boolean`
+   - Handles network errors, WebAssembly memory errors, and model load failures gracefully.
+
+4. **Output Handling Layer (`frontend/stt/outputHandler.js`)**:
+   - Pure UI / chat flow integration adapter.
+   - Accepts raw text and handles injection into the chat input area (`#prompt`), auto-resizing textarea, updating cursor position, or optionally auto-submitting.
+   - *Zero knowledge of audio recording, Whisper, or transformers.js.*
+
+5. **STT Controller / Orchestrator (`frontend/stt/sttController.js`)**:
+   - Connects the layers with state management (`IDLE`, `RECORDING`, `MODEL_LOADING`, `TRANSCRIBING`, `ERROR`).
+   - Surfaces state and progress to UI hooks for reactive indicators.
+
+---
+
+## Multi-Model Architecture Analysis (Flagged for Future Scalability)
+
+To scale from a single swappable model to **multiple simultaneous models** (e.g., English Whisper + a native Indic language model like `Xenova/whisper-small-hi` or a specialized domain model):
+
+1. **Config Layer**:
+   - Transition from a single `STT_CONFIG` object to a **Model Registry Map** (e.g., `MODELS = { 'en-small': {...}, 'hi-small': {...}, 'multilingual': {...} }`) with an active model selector or dynamic router.
+2. **Inference Layer**:
+   - Replace the single `pipelineInstance` with an **LRU Pipeline Cache / Model Pool** (e.g. `Map<modelId, pipeline>`).
+   - Note on browser extension memory limits: Each ONNX model consumes 100MB-400MB of WASM memory. Loading 2+ models simultaneously may hit browser tab memory limits (typically 2-4GB limit in Chromium). An explicit eviction policy (`dispose()` / releasing WASM buffers) or dynamic hot-swapping will be necessary.
+3. **Router / Language Identification (LID)**:
+   - Introduce an acoustic Language ID pre-pass (e.g., a lightweight 10MB Whisper-tiny / Silero LID) or a UI language selector dropdown to route the `Float32Array` audio to the appropriate model instance before transcribing.
+4. **Output Layer**:
+   - Remains completely unchanged because `outputHandler.js` is already decoupled and only consumes plain text strings.
+
+---
+
+## Proposed Changes
+
+### STT Module
+#### [NEW] `frontend/stt/config.js`
+- Defines `STT_CONFIG` with `modelId: "Xenova/whisper-small.en"`, `language: "english"`, `quantized: true`.
+
+#### [NEW] `frontend/stt/audioCapture.js`
+- Implements mic permissions, Web Audio API resampling, 16kHz mono `Float32Array` output, volume metering, and error handling.
+
+#### [NEW] `frontend/stt/inference.js`
+- Implements transformers.js pipeline singleton, model caching, progress callbacks, and `transcribe(audioData)`.
+
+#### [NEW] `frontend/stt/sttWorker.js`
+- Off-thread Web Worker wrapper for transformers.js inference to keep UI 100% responsive.
+
+#### [NEW] `frontend/stt/outputHandler.js`
+- Implements text insertion, cursor manipulation, and chat input flow integration.
+
+#### [NEW] `frontend/stt/sttController.js`
+- Implements unified STT lifecycle, state machine, and UI event binding.
+
+### Frontend Integration
+#### [MODIFY] `frontend/sidepanel/sidepanel.html`
+- Add microphone button (`#micBtn`) and audio recording / model loading status bar.
+
+#### [MODIFY] `frontend/sidepanel/sidepanel.css`
+- Add modern dark-theme styling for recording animation, microphone pulse, and progress bar.
+
+#### [MODIFY] `frontend/sidepanel/sidepanel.js`
+- Initialize `STTController` and bind `#micBtn` to recording/transcription flow.
+
+#### [MODIFY] `frontend/build.ps1`
+- Add `"stt"` to `$SharedFolders` so extension build scripts include the new module.
+
+---
+
+## Verification Plan
+
+### Automated / Unit Verification
+- Test audio resampler logic to verify 16kHz mono `Float32Array` output from simulated audio buffers.
+- Test `config.js` parameter validation.
+- Test `outputHandler.js` insertion into DOM textarea elements.
+
+### Manual Verification
+- Open extension sidepanel in Chrome/Edge.
+- Click microphone button, grant mic permission, speak "Locate the search bar", stop recording.
+- Verify download progress bar on first run.
+- Verify transcribed text appears in `#prompt` textarea seamlessly.
+- Test error recovery (mic permission blocked, cancel recording).
